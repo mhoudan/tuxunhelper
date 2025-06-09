@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tuxun.fun Helper</title>
+    <!-- Load Leaflet for maps (replaces your popup) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; }
+        #game-frame { 
+            width: 100%; 
+            height: 100vh; 
+            border: none; 
+        }
+        #plugin-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            z-index: 9999;
+            width: 300px;
+        }
+        #map { height: 200px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <!-- Embedded tuxun.fun -->
+    <iframe id="game-frame" src="https://tuxun.fun" allow="fullscreen"></iframe>
+
+    <!-- Plugin UI (replaces Chrome popup) -->
+    <div id="plugin-panel">
+        <h3>Location Solver</h3>
+        <div>Coordinates: <span id="coords-display">Waiting...</span></div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+        // ========================
+        // 1. INJECT YOUR SCRIPT
+        // ========================
+        const iframe = document.getElementById('game-frame');
+        
+        iframe.onload = () => {
+            const script = document.createElement('script');
+            script.textContent = `
+                // --- Modified inject.js (no Chrome APIs) ---
+                (function(xhr) {
+                    var XHR = XMLHttpRequest.prototype;
+                    var open = XHR.open;
+                    var send = XHR.send;
+                    XHR.open = function(method, url) {
+                        this._method = method;
+                        this._url = url;
+                        return open.apply(this, arguments);
+                    };
+                    XHR.send = function(postData) {
+                        this.addEventListener('load', function() {
+                            if(this.responseURL.includes("getGooglePanoInfoPost")) {
+                                try {
+                                    let retDat = JSON.parse(this.response);
+                                    let relevant = retDat[1][0][5][0][1][0];
+                                    // Send coordinates to parent window
+                                    window.parent.postMessage({
+                                        type: 'tuxun-coords',
+                                        coords: [relevant[2], relevant[3]]
+                                    }, '*');
+                                } catch (e) { console.error(e); }
+                            }
+                        });
+                        return send.apply(this, arguments);
+                    };
+                })(XMLHttpRequest);
+            `;
+            iframe.contentDocument.head.appendChild(script);
+        };
+
+        // ========================
+        // 2. HANDLE COORDINATES
+        // ========================
+        // Initialize Leaflet map
+        const map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        const marker = L.marker([0, 0]).addTo(map);
+
+        // Listen for coordinates from iframe
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'tuxun-coords') {
+                const [lat, lng] = event.data.coords;
+                // Update UI
+                document.getElementById('coords-display').textContent = 
+                    `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+                // Update map
+                marker.setLatLng([lat, lng]);
+                map.setView([lat, lng], 10);
+            }
+        });
+    </script>
+</body>
+</html>
