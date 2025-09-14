@@ -1,5 +1,3 @@
-#V2.1
-#colse the previous map automatically
 import requests
 from playwright.sync_api import sync_playwright
 from urllib.parse import urlparse, parse_qs
